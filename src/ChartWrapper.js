@@ -1,6 +1,6 @@
 import React from "react";
 import { createChart } from 'lightweight-charts';
-import { fetchCandles, getRangeBefore } from "./helpers";
+import {fetchCandles, fetchStrategyValue, generateLineData, getRangeBefore} from "./helpers";
 
 
 class ChartWrapper extends React.Component {
@@ -9,14 +9,22 @@ class ChartWrapper extends React.Component {
         super(props);
         this.chartDiv = React.createRef();
 
-        this.lineSeries = null
+        this.ohlcSeries = null
+        this.valueSeries = {}
 
         this.fetchForNewVisibleLogicalRange = this.fetchForNewVisibleLogicalRange.bind(this);
         this.onVisibleLogicalRangeChanged = this.onVisibleLogicalRangeChanged.bind(this);
 
+        let data = { ohlc : []}
+        this.props.state.strategy.assets.forEach(
+            (asset) => {
+                data[asset.asset_name] = []
+            }
+        )
+
         this.state = {
             ...this.props.state,
-            data : [],
+            data : {...data},
             // displayStart: null,
             // displayEnd: null,
             isLoaded: false,
@@ -31,10 +39,10 @@ class ChartWrapper extends React.Component {
         * helper to calculate range of missing candles before visible range and trigger fetch
         * */
 
-        if (this.lineSeries) {
+        if (this.ohlcSeries) {
 
-            const barsInfo = this.lineSeries.barsInLogicalRange(newVisibleLogicalRange);
-            const barLength = this.state.data[1].time - this.state.data[0].time
+            const barsInfo = this.ohlcSeries.barsInLogicalRange(newVisibleLogicalRange);
+            const barLength = this.state.data.ohlc[1].time - this.state.data.ohlc[0].time
 
             // call helper to estimate number of missing candles before last visible candle
             let rangeBefore = getRangeBefore(barsInfo, barLength)
@@ -46,8 +54,8 @@ class ChartWrapper extends React.Component {
             if (barsInfo !== null && barsInfo.barsBefore < 10 && fetchStart !== null && fetchEnd !== null) {
                 this.fetchData(fetchStart, fetchEnd)
                     .then(
-                        (result) => {
-                            if (result) {
+                        (res) => {
+                            if (res) {
                                 this.setChartData(this.chart, this.state.data, null);
                             }
                         },
@@ -115,8 +123,8 @@ class ChartWrapper extends React.Component {
         // fetch data with null
         this.fetchData(null, null)
             .then(
-                (result) => {
-                    if (result) {
+                (res) => {
+                    if (res) {
                         this.initializeChartData(this.chart, this.state.data, this.props.tradeData);
                     }
                 },
@@ -158,54 +166,95 @@ class ChartWrapper extends React.Component {
 
     // initialize chart data
     initializeChartData(chart, data, tradeData) {
-        if (data[0].open) {
-            this.lineSeries = chart.addCandlestickSeries();
-            this.lineSeries.setData(data)
-            // this.addTradeMarkers(chart.lineSeries, tradeData)
+        if (data.ohlc[0].open) {
+            this.ohlcSeries = chart.addCandlestickSeries({ pane: 0 });
+            this.ohlcSeries.setData(data.ohlc)
+
+            this.state.strategy.assets.forEach((asset, index) => {
+                    this.valueSeries[asset.asset_name] = chart.addLineSeries(
+                        {title: asset.asset_name, pane:index + 1}
+                    )
+                }
+            )
+
         }
     }
 
-    // update data in lineSeries
+    // update data in ohlcSeries
     setChartData(chart, data, tradeData) {
-         if (data[0].open) {
-             this.lineSeries.setData(data);
-        }
+         if (data.ohlc[0].open) {
+             this.ohlcSeries.setData(data.ohlc);
+             this.state.strategy.assets.forEach((asset, index) => {
+                    this.valueSeries[asset.asset_name].setData(data[asset.asset_name])
+                 }
+             )
+         }
     }
 
-    updateChartData(chart, data, tradeData) {
-        if (data[0].open) {
-            data.forEach((d, i) => {
-                this.lineSeries.update(d);
-            })
-        }
-    }
+    // updateChartData(chart, data, tradeData) {
+    //     if (data[0].open) {
+    //         data.forEach((d, i) => {
+    //             this.ohlcSeries.update(d);
+    //         })
+    //     }
+    // }
 
-    fetchData(start, end){
+    async fetchData(start, end) {
         // fetch data based on props only!
-        const { market, timeframe, limit } = this.props.state
+        const {market, timeframe, limit, strategy} = this.props.state
 
-        return fetchCandles(market, timeframe, limit, start, end)
-            .then(
-                (result) => {
+        let promises = [];
+
+        promises.push(fetchCandles(market, timeframe, limit, start, end))
+
+        strategy.assets.forEach((asset) => {
+            promises.push(fetchStrategyValue(strategy.strategy_name, asset.asset_name, timeframe, limit, start, end))
+        })
+
+
+        return await Promise.all(promises).then(
+                (res) => {
+
+                    let [candlesRes, ...stratValueRes] = res
+                    // ohlc results
+                    let data =  {
+                    ...this.state.data, ohlc: [...candlesRes, ...this.state.data.ohlc],
+                    }
+                    // strategy results
+                    stratValueRes.forEach(
+                        (asset, index) => {
+                            let asset_name = strategy.assets[index].asset_name
+
+                            if (this.state.data[asset_name]) {
+                                data[asset_name] = [...asset, ...this.state.data[asset_name]]
+                            }
+                            else {
+                                data[asset_name] = [...asset]
+                            }
+                        }
+                    )
+
                     this.setState({
-                        isLoaded: true,
-                        data: [...result, ...this.state.data],
-                    });
+                            data: {...data},
+                            isLoaded: true,
+                        }
+                    );
                     // return just in case
-                    return result;
+                    return [candlesRes, stratValueRes];
                 },
                 // Note: it's important to handle errors here
                 // instead of a catch() block so that we don't swallow
                 // exceptions from actual bugs in components.
-                (error) => {
+                (error1, error2) => {
                     this.setState({
                         isLoaded: false,
-                        error
+                        error: error1,
                     });
                     // return just in case
-                    return error;
+                    return error1;
                 }
             )
+        // return candlesRes
     }
 
     addTradeMarkers(series, tradeData) {

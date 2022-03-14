@@ -1,5 +1,7 @@
 import './App.css';
 import Dashboard from "./Dashboard";
+import {Spinner} from "react-bootstrap";
+import React, {Suspense} from "react";
 
 function App() {
 
@@ -8,7 +10,9 @@ function App() {
       <header>
           tv-lightweight-charts Example
       </header>
-        <Dashboard/>
+        <Suspense fallback={<Spinner animation="border" />}>
+            <Dashboard/>
+        </Suspense>
     </div>
 
   );

@@ -1,12 +1,11 @@
-import {CANDLES_API_ENDPOINT, CANDLES_ENDPOINT, MARKETS_API} from "./constants";
+import {CANDLES_API_ENDPOINT, CANDLES_ENDPOINT, MARKETS_API, STRATEGIES_API} from "./constants";
+import {useEffect, useRef} from "react";
 
 
 export const fetchCandles = (
     asset_name, timeframe='minute', limit=10, start=null, end=null
 ) => {
     let range
-    console.log('start:', start)
-    console.log('end:', end)
     if (start && end) {
         range = `start=${start}&end=${end}`
     }
@@ -26,6 +25,30 @@ export const fetchMarkets = () => {
         .then(res => res.json())
 }
 
+export const fetchStrategies = (timeframe) => {
+    return fetch(STRATEGIES_API + '?timeframe=' + timeframe)
+        .then(res => res.json())
+}
+
+export const fetchStrategyValue = (
+    strategy_name, asset_name, timeframe, limit=10, start=null, end=null
+) => {
+
+    let range
+    if (start && end) {
+        range = `start=${start}&end=${end}`
+    }
+    else if (limit) {
+        range = `limit=${limit}`
+    }
+    else {
+        range = `limit=10`
+    }
+
+    return fetch(STRATEGIES_API
+        + `/${strategy_name}/${asset_name}/value?timeframe=${timeframe}&` + range)
+        .then(res => res.json())
+}
 
 export const getRangeBefore = (barsInfo, barLength) => {
 
@@ -69,3 +92,30 @@ export const wrapPromise = (promise) => {
         },
     };
 }
+
+export function generateLineData(minValue, maxValue, maxDailyGainLoss = 1000) {
+    var res = [];
+    var time = new Date(Date.UTC(2018, 0, 1, 0, 0, 0, 0));
+    for (var i = 0; i < 500; ++i) {
+        var previous = res.length > 0 ? res[res.length - 1] : { value: 0 };
+        var newValue = previous.value + ((Math.random() * maxDailyGainLoss * 2) - maxDailyGainLoss);
+
+        res.push({
+            time: time.getTime() / 1000,
+            value: Math.max(minValue, Math.min(maxValue, newValue))
+        });
+
+        time.setUTCDate(time.getUTCDate() + 1);
+    }
+
+    return res;
+}
+
+function usePrevious(value) {
+    const ref = useRef();
+    useEffect(() => {
+        ref.current = value; //assign the value of ref to the argument
+    },[value]); //this code will run when the value of 'value' changes
+    return ref.current; //in the end, return the current ref value.
+}
+export default usePrevious;
