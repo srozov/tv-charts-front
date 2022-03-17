@@ -5,7 +5,7 @@ import {STRATEGIES_API, TIMEFRAMES} from "./constants";
 
 const marketsResource = wrapPromise(fetchMarkets())
 // first fetch with default state
-const initialStrategiesResource = wrapPromise(fetchStrategies('minute'))
+const initialStrategiesResource = wrapPromise(fetchStrategies('BTCUSDT','minute'))
 
 // const strategiesResource = (timeframe) => wrapPromise(fetchStrategies(timeframe))
 
@@ -22,10 +22,10 @@ export default function Header({state, handleStateChange}) {
         <Container>
             <Row className="g-2">
                 <Suspense fallback={<Spinner animation="border" />}>
-                    <MarketSelect state={state} handleStateChange={handleStateChange}/>
+                    <MarketSelect state={state} setStrategiesResource={setStrategiesResource} handleStateChange={handleStateChange}/>
                 </Suspense>
                 <Suspense fallback={<Spinner animation="border" />}>
-                    <TimeFrameSelect state={state} setStrategiesResource={setStrategiesResource}/>
+                    <TimeFrameSelect state={state} setStrategiesResource={setStrategiesResource} handleStateChange={handleStateChange}/>
                 </Suspense>
                 <Suspense fallback={<Spinner animation="border" />}>
                     <StrategySelect state={state} resource={strategiesResource} handleStateChange={handleStateChange}/>
@@ -41,7 +41,7 @@ export default function Header({state, handleStateChange}) {
     )
 }
 
-function MarketSelect({state, handleStateChange}) {
+function MarketSelect({state, setStrategiesResource, handleStateChange}) {
 
     const markets = marketsResource.read()
 
@@ -50,7 +50,8 @@ function MarketSelect({state, handleStateChange}) {
             <FloatingLabel controlId="floatingInputGrid" label="Market">
                 <Form.Select aria-label="Market Select" onChange={
                     (e) => {
-                        handleStateChange({market: e.target.value});
+                        setStrategiesResource(wrapPromise(fetchStrategies(e.target.value, state.timeframe)));
+                        handleStateChange({market: e.target.value, strategy: {}});
                     }
                 }>
                 {markets.map(m =>
@@ -62,14 +63,15 @@ function MarketSelect({state, handleStateChange}) {
     )
 }
 
-function TimeFrameSelect({state, setStrategiesResource}) {
+function TimeFrameSelect({state, setStrategiesResource, handleStateChange}) {
 
     return (
         <Col md>
             <FloatingLabel controlId="floatingInputGrid" label="Timeframe">
                 <Form.Select aria-label="Timeframe Select" onChange={
                     (e) => {
-                        setStrategiesResource(wrapPromise(fetchStrategies(e.target.value)));
+                        setStrategiesResource(wrapPromise(fetchStrategies(state.market, e.target.value)));
+                        handleStateChange({timeframe: e.target.value, strategy: {}});
                     }
                 }>
                 {TIMEFRAMES.map(t =>
@@ -98,23 +100,25 @@ function LimitSelect({state, handleStateChange}) {
 
 function StrategySelect({ state, resource, handleStateChange}) {
 
-    const {} = state
-    const strategies = resource.read()
+    const { market, timeframe } = state
+    let strategies = resource.read()
     let defaultStrategy
     let defaultStrategyName
 
     useEffect(() => {
         // this effect should only run when strategies changes -> only once on page load
         // (substitute for componentDidMount)
-        if (strategies) {
+        if (strategies && strategies.length !== 0) {
             defaultStrategy = strategies[0]
             defaultStrategyName = defaultStrategy.strategy_name
             handleStateChange({ strategy: defaultStrategy })
         }
-        }, [strategies])
+        // }, [strategies, market, timeframe])
+    }, [market, timeframe])
 
 
-        return (
+
+    return (
         <Col md>
             <FloatingLabel controlId="floatingInputGrid" label="Strategy">
                 <Form.Select aria-label="Strategy Select" defaultValue={defaultStrategyName} onChange={

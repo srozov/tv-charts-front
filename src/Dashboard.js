@@ -5,7 +5,7 @@ import Strategy from "./Strategy";
 import {Stack} from "react-bootstrap";
 import {fetchStrategies, wrapPromise} from "./helpers";
 
-const initialStrategiesResource = wrapPromise(fetchStrategies('minute'))
+const initialStrategiesResource = wrapPromise(fetchStrategies('BTCUSDT','minute'))
 
 export default function Dashboard(props) {
 
@@ -27,10 +27,11 @@ export default function Dashboard(props) {
 
     const initState = {
         market : 'BTCUSDT',
-        strategy: {
-            strategy_name : 'factorycreated_strategy_1',
-            assets: [{asset_name: 'BTCUSDT'}, {asset_name: 'USDT'}]
-        },
+        // strategy: {
+        //     strategy_name : 'factorycreated_strategy_1',
+        //     assets: [{asset_name: 'BTCUSDT'}, {asset_name: 'USDT'}]
+        // },
+        // strategy : null,
         // strategy: {...defaultStrategy},
         timeframe: 'minute',
         limit: 100,

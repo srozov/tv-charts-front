@@ -25,8 +25,9 @@ export const fetchMarkets = () => {
         .then(res => res.json())
 }
 
-export const fetchStrategies = (timeframe) => {
-    return fetch(STRATEGIES_API + '?timeframe=' + timeframe)
+export const fetchStrategies = (asset_name, timeframe) => {
+
+    return fetch(STRATEGIES_API + `?timeframe=${timeframe}&asset_name=${asset_name}`)
         .then(res => res.json())
 }
 

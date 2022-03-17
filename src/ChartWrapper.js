@@ -2,12 +2,17 @@ import React from "react";
 import { createChart } from 'lightweight-charts';
 import {fetchCandles, fetchStrategyValue, generateLineData, getRangeBefore} from "./helpers";
 
+import _ from "lodash";
+import data from "bootstrap/js/src/dom/data";
+
+const dataTemplate = {ohlc : []}
 
 class ChartWrapper extends React.Component {
 
     constructor(props) {
         super(props);
         this.chartDiv = React.createRef();
+        this.chart = null;
 
         this.ohlcSeries = null
         this.valueSeries = {}
@@ -15,18 +20,19 @@ class ChartWrapper extends React.Component {
         this.fetchForNewVisibleLogicalRange = this.fetchForNewVisibleLogicalRange.bind(this);
         this.onVisibleLogicalRangeChanged = this.onVisibleLogicalRangeChanged.bind(this);
 
-        let data = { ohlc : []}
-        this.props.state.strategy.assets.forEach(
-            (asset) => {
-                data[asset.asset_name] = []
-            }
-        )
+        let data = {...dataTemplate}
+
+        if (this.props.state.strategy){
+            this.props.state.strategy.assets.forEach(
+                (asset) => {
+                    data[asset.asset_name] = []
+                }
+            )
+        }
 
         this.state = {
             ...this.props.state,
             data : {...data},
-            // displayStart: null,
-            // displayEnd: null,
             isLoaded: false,
             error: null,
             chart: null,
@@ -82,72 +88,90 @@ class ChartWrapper extends React.Component {
     }
 
     componentDidMount() {
-        this.chart = createChart(this.chartDiv.current, {
-            width: 800, height: 400,
-            timeScale: {
-                timeVisible: true,
-                secondsVisible: false,
-                borderColor: '#485c7b',
-            },
-            watermark: {
-                visible: true,
-                fontSize: 34,
-                color: 'rgba(0, 0, 0, 0.25)',
-            },
-            layout: {
-                backgroundColor: '#253248',
-                textColor: 'rgba(255, 255, 255, 0.9)',
-            },
-            grid: {
-                vertLines: {
-                    color: '#334158',
-                },
-                horzLines: {
-                    color: '#334158',
-                },
-            },
-            priceScale: {
-                borderColor: '#485c7b',
-            },
-        });
-
-        // "Setting state" for the chart
-        var options = {
-            watermark: {
-                text: this.props.state.market
-            }
-        }
-        this.chart.applyOptions(options)
-
         console.log('component did mount')
-        // fetch data with null
-        this.fetchData(null, null)
-            .then(
-                (res) => {
-                    if (res) {
-                        this.initializeChartData(this.chart, this.state.data, this.props.tradeData);
-                    }
-                },
-                (error) => {
-                    console.log(error)
-                }
-            )
-
-        this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onVisibleLogicalRangeChanged)
-        // TODO: subscribeVisibleTimeRangeChange gives only time range of candles -> useless for loading past candles
-        // this.chart.timeScale().subscribeVisibleTimeRangeChange(this.onVisibleLogicalRangeChanged)
-
-        window.addEventListener("resize", this.resizeHandler);
-        this.resizeHandler();
     }
-
 
     componentWillUnmount() {
         clearTimeout(this.timer);
     }
 
     componentDidUpdate(prevProps, prevState) {
-        console.log('component did update')
+
+        const prev = _.pick(prevProps.state, ['market', 'strategy', 'timeframe'])
+        const current = _.pick(this.props.state, ['market', 'strategy', 'timeframe'])
+        // check if props passing Header's state changed
+        if (!_.isEqual(prev, current)) {
+            // add timer to avoid cascading state update
+            clearTimeout(this.timer2)
+            this.timer2 = setTimeout(() => {
+                console.log('component did update')
+
+                if (this.chart !== null){
+                    this.chart.remove()
+                    this.setState({
+                        data : {...dataTemplate}
+                    })
+                }
+
+                this.chart = createChart(this.chartDiv.current, {
+                    width: 800, height: 400,
+                    timeScale: {
+                        timeVisible: true,
+                        secondsVisible: false,
+                        borderColor: '#485c7b',
+                    },
+                    watermark: {
+                        visible: true,
+                        fontSize: 34,
+                        color: 'rgba(0, 0, 0, 0.25)',
+                    },
+                    layout: {
+                        backgroundColor: '#253248',
+                        textColor: 'rgba(255, 255, 255, 0.9)',
+                    },
+                    grid: {
+                        vertLines: {
+                            color: '#334158',
+                        },
+                        horzLines: {
+                            color: '#334158',
+                        },
+                    },
+                    priceScale: {
+                        borderColor: '#485c7b',
+                    },
+                });
+
+                // "Setting state" for the chart
+                var options = {
+                    watermark: {
+                        text: this.props.state.market
+                    }
+                }
+                this.chart.applyOptions(options)
+
+                window.addEventListener("resize", this.resizeHandler);
+                this.resizeHandler();
+
+                // fetch data with null
+                this.fetchData(null, null)
+                    .then(
+                        (res) => {
+                            if (res) {
+                                this.initializeChartData(this.chart, this.state.data, this.props.tradeData);
+                            }
+                        },
+                        (error) => {
+                            console.log(error)
+                        }
+                    )
+
+                this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onVisibleLogicalRangeChanged)
+                // TODO: subscribeVisibleTimeRangeChange gives only time range of candles -> useless for loading past candles
+                // this.chart.timeScale().subscribeVisibleTimeRangeChange(this.onVisibleLogicalRangeChanged)
+
+            }, 300);
+        }
     }
 
     render() {
@@ -166,28 +190,29 @@ class ChartWrapper extends React.Component {
 
     // initialize chart data
     initializeChartData(chart, data, tradeData) {
-        if (data.ohlc[0].open) {
+        if (data.ohlc.length && data.ohlc[0].open) {
+
             this.ohlcSeries = chart.addCandlestickSeries({ pane: 0 });
             this.ohlcSeries.setData(data.ohlc)
 
-            this.state.strategy.assets.forEach((asset, index) => {
-                    this.valueSeries[asset.asset_name] = chart.addLineSeries(
-                        {title: asset.asset_name, pane:index + 1}
-                    )
-                }
-            )
+            // this.state.strategy.assets.forEach((asset, index) => {
+            //         this.valueSeries[asset.asset_name] = chart.addLineSeries(
+            //             {title: asset.asset_name, pane:index + 1}
+            //         )
+            //     }
+            // )
 
         }
     }
 
     // update data in ohlcSeries
     setChartData(chart, data, tradeData) {
-         if (data.ohlc[0].open) {
+         if (data.ohlc.length && data.ohlc[0].open) {
              this.ohlcSeries.setData(data.ohlc);
-             this.state.strategy.assets.forEach((asset, index) => {
-                    this.valueSeries[asset.asset_name].setData(data[asset.asset_name])
-                 }
-             )
+             // this.state.strategy.assets.forEach((asset, index) => {
+             //        this.valueSeries[asset.asset_name].setData(data[asset.asset_name])
+             //     }
+             // )
          }
     }
 
@@ -207,10 +232,11 @@ class ChartWrapper extends React.Component {
 
         promises.push(fetchCandles(market, timeframe, limit, start, end))
 
-        strategy.assets.forEach((asset) => {
-            promises.push(fetchStrategyValue(strategy.strategy_name, asset.asset_name, timeframe, limit, start, end))
-        })
-
+        if (strategy && !_.isEmpty(strategy)) {
+            strategy.assets.forEach((asset) => {
+                promises.push(fetchStrategyValue(strategy.strategy_name, asset.asset_name, timeframe, limit, start, end))
+            })
+        }
 
         return await Promise.all(promises).then(
                 (res) => {
@@ -221,18 +247,21 @@ class ChartWrapper extends React.Component {
                     ...this.state.data, ohlc: [...candlesRes, ...this.state.data.ohlc],
                     }
                     // strategy results
-                    stratValueRes.forEach(
-                        (asset, index) => {
-                            let asset_name = strategy.assets[index].asset_name
 
-                            if (this.state.data[asset_name]) {
-                                data[asset_name] = [...asset, ...this.state.data[asset_name]]
+                    if (stratValueRes && stratValueRes.length !== 0) {
+                        stratValueRes.forEach(
+                            (asset, index) => {
+                                let asset_name = strategy.assets[index].asset_name
+
+                                if (this.state.data[asset_name]) {
+                                    data[asset_name] = [...asset, ...this.state.data[asset_name]]
+                                }
+                                else {
+                                    data[asset_name] = [...asset]
+                                }
                             }
-                            else {
-                                data[asset_name] = [...asset]
-                            }
-                        }
-                    )
+                        )
+                    }
 
                     this.setState({
                             data: {...data},
