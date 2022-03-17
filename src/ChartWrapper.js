@@ -1,11 +1,11 @@
 import React from "react";
 import { createChart } from 'lightweight-charts';
-import {fetchCandles, fetchStrategyValue, generateLineData, getRangeBefore} from "./helpers";
+import {fetchCandles, fetchStrategyTrades, fetchStrategyValue, generateLineData, getRangeBefore} from "./helpers";
 
 import _ from "lodash";
 import data from "bootstrap/js/src/dom/data";
 
-const dataTemplate = {ohlc : []}
+const dataTemplate = {ohlc : [], trades: []}
 
 class ChartWrapper extends React.Component {
 
@@ -158,6 +158,8 @@ class ChartWrapper extends React.Component {
                     .then(
                         (res) => {
                             if (res) {
+                                console.log('this.state.data', this.state.data)
+
                                 this.initializeChartData(this.chart, this.state.data, this.props.tradeData);
                             }
                         },
@@ -193,6 +195,7 @@ class ChartWrapper extends React.Component {
         if (data.ohlc.length && data.ohlc[0].open) {
             this.ohlcSeries = chart.addCandlestickSeries({ pane: 0 });
             this.ohlcSeries.setData(data.ohlc)
+            this.ohlcSeries.setMarkers(data.trades)
         }
 
         // console.log('this.state.strategy', this.state.strategy)
@@ -227,7 +230,13 @@ class ChartWrapper extends React.Component {
 
         let promises = [];
 
+        let promiseTrade;
+
         promises.push(fetchCandles(market, timeframe, limit, start, end))
+
+        if (!_.isEmpty(strategy)){
+            promiseTrade = fetchStrategyTrades(strategy.strategy_name, market, timeframe, limit, start, end)
+        }
 
         if (strategy && !_.isEmpty(strategy)) {
             strategy.assets.forEach((asset) => {
@@ -235,13 +244,31 @@ class ChartWrapper extends React.Component {
             })
         }
 
-        return await Promise.all(promises).then(
+        return await Promise.all([promiseTrade, ...promises]).then(
                 (res) => {
 
-                    let [candlesRes, ...stratValueRes] = res
+                    let [tradesRes, candlesRes, ...stratValueRes] = res
+                    // trades results
+                    let tradeMarkers = []
+                    if (tradesRes) {
+                        tradesRes.forEach(t => {
+                            if (t.amount > 0) {
+                                tradeMarkers.push(
+                                    {time: t.timestamp, position: 'belowBar', color: '#2196F3', shape: 'arrowUp', text: 'Buy @ ' + t.price}
+                                )
+                            } else if (t.amount < 0) {
+                                tradeMarkers.push(
+                                    {time: t.timestamp, position: 'aboveBar', color: '#e91e63', shape: 'arrowDown', text: 'Sell @ ' + t.price}
+                                )
+                            }
+                        })
+                    }
+
                     // ohlc results
                     let data =  {
-                    ...this.state.data, ohlc: [...candlesRes, ...this.state.data.ohlc],
+                        ...this.state.data,
+                        ohlc: [...candlesRes, ...this.state.data.ohlc],
+                        trades: [...tradeMarkers, ...this.state.data.trades],
                     }
                     // strategy results
 
@@ -266,7 +293,7 @@ class ChartWrapper extends React.Component {
                         }
                     );
                     // return just in case
-                    return [candlesRes, stratValueRes];
+                    return [tradesRes, candlesRes, ...stratValueRes];
                 },
                 // Note: it's important to handle errors here
                 // instead of a catch() block so that we don't swallow
