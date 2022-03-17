@@ -51,7 +51,7 @@ function MarketSelect({state, setStrategiesResource, handleStateChange}) {
                 <Form.Select aria-label="Market Select" onChange={
                     (e) => {
                         setStrategiesResource(wrapPromise(fetchStrategies(e.target.value, state.timeframe)));
-                        handleStateChange({market: e.target.value, strategy: {}});
+                        handleStateChange({market: e.target.value, strategy: null});
                     }
                 }>
                 {markets.map(m =>
@@ -71,7 +71,7 @@ function TimeFrameSelect({state, setStrategiesResource, handleStateChange}) {
                 <Form.Select aria-label="Timeframe Select" onChange={
                     (e) => {
                         setStrategiesResource(wrapPromise(fetchStrategies(state.market, e.target.value)));
-                        handleStateChange({timeframe: e.target.value, strategy: {}});
+                        handleStateChange({timeframe: e.target.value, strategy: null});
                     }
                 }>
                 {TIMEFRAMES.map(t =>

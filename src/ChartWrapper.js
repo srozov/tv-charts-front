@@ -105,10 +105,10 @@ class ChartWrapper extends React.Component {
             clearTimeout(this.timer2)
             this.timer2 = setTimeout(() => {
                 console.log('component did update')
-
                 if (this.chart !== null){
                     this.chart.remove()
                     this.setState({
+                        ...this.props.state,
                         data : {...dataTemplate}
                     })
                 }
@@ -191,17 +191,20 @@ class ChartWrapper extends React.Component {
     // initialize chart data
     initializeChartData(chart, data, tradeData) {
         if (data.ohlc.length && data.ohlc[0].open) {
-
             this.ohlcSeries = chart.addCandlestickSeries({ pane: 0 });
             this.ohlcSeries.setData(data.ohlc)
+        }
 
-            // this.state.strategy.assets.forEach((asset, index) => {
-            //         this.valueSeries[asset.asset_name] = chart.addLineSeries(
-            //             {title: asset.asset_name, pane:index + 1}
-            //         )
-            //     }
-            // )
+        // console.log('this.state.strategy', this.state.strategy)
 
+        if (this.props.state.strategy){
+            console.log('initializeChartData strategy')
+            this.props.state.strategy.assets.forEach((asset, index) => {
+                    this.valueSeries[asset.asset_name] = chart.addLineSeries(
+                        {title: asset.asset_name, pane:index + 1}
+                    )
+                }
+            )
         }
     }
 
@@ -209,20 +212,14 @@ class ChartWrapper extends React.Component {
     setChartData(chart, data, tradeData) {
          if (data.ohlc.length && data.ohlc[0].open) {
              this.ohlcSeries.setData(data.ohlc);
-             // this.state.strategy.assets.forEach((asset, index) => {
-             //        this.valueSeries[asset.asset_name].setData(data[asset.asset_name])
-             //     }
-             // )
+         }
+         if (this.props.state.strategy){
+             this.props.state.strategy.assets.forEach((asset, index) => {
+                    this.valueSeries[asset.asset_name].setData(data[asset.asset_name])
+                 }
+             )
          }
     }
-
-    // updateChartData(chart, data, tradeData) {
-    //     if (data[0].open) {
-    //         data.forEach((d, i) => {
-    //             this.ohlcSeries.update(d);
-    //         })
-    //     }
-    // }
 
     async fetchData(start, end) {
         // fetch data based on props only!
