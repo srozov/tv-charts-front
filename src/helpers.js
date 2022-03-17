@@ -51,6 +51,26 @@ export const fetchStrategyValue = (
         .then(res => res.json())
 }
 
+export const fetchStrategyTrades = (
+    strategy_name, asset_name, timeframe, limit=10, start=null, end=null
+) => {
+
+    let range
+    if (start && end) {
+        range = `start=${start}&end=${end}`
+    }
+    else if (limit) {
+        range = `limit=${limit}`
+    }
+    else {
+        range = `limit=10`
+    }
+
+    return fetch(STRATEGIES_API
+        + `/${strategy_name}/${asset_name}/trades?timeframe=${timeframe}&` + range)
+        .then(res => res.json())
+}
+
 export const getRangeBefore = (barsInfo, barLength) => {
 
     let firstVisibleDate, lastInvisibleDate, firstInvisibleDate
